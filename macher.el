@@ -213,6 +213,18 @@ indicators."
   :type '(function :tag "Workspace string function")
   :group 'macher)
 
+(defcustom macher-allow-context-refinement t
+  "Whether to allow interactive refinement of workspace context content.
+
+When non-nil, users can interactively edit the workspace context
+content in a temporary buffer before it's sent to the LLM. Users can
+confirm their changes with C-c C-c or cancel with C-c C-k.
+
+When nil, the workspace context is sent directly without user
+interaction."
+  :type 'boolean
+  :group 'macher)
+
 (defcustom macher-process-request-function #'macher--process-request
   "Function to handle changes during the macher request lifecycle.
 
@@ -731,8 +743,94 @@ Returns a workspace information string to be added to the request."
           (insert "END WORKSPACE CONTEXT:\n")
           (insert "=======================================================\n")
           (insert "\n")
+          ;; Allow users to interactively refine the workspace context content if enabled
+          (let ((context-content (buffer-string)))
+            (if macher-allow-context-refinement
+                (macher--refine-context-content context-content)
+              context-content)))))))
 
-          (buffer-string))))))
+(defvar macher--context-refinement-result nil
+  "Variable to store the result of context refinement.")
+
+(defvar macher--context-refinement-confirmed nil
+  "Variable to track if context refinement was confirmed.")
+
+(defun macher--refine-context-content (initial-content)
+  "Allow user to interactively refine INITIAL-CONTENT in a temporary buffer.
+
+Pops up a temporary buffer containing the workspace context content,
+allowing the user to edit it before sending to the LLM. The user can
+press C-c C-c to confirm the content or C-c C-k to cancel and use the
+original content."
+  (let* ((buffer-name "*Macher Context Refinement*")
+         (refinement-buffer (get-buffer-create buffer-name)))
+
+    ;; Initialize result variables
+    (setq macher--context-refinement-result initial-content)
+    (setq macher--context-refinement-confirmed nil)
+
+    (with-current-buffer refinement-buffer
+      ;; Clear buffer and insert content
+      (erase-buffer)
+
+      ;; Add header with instructions
+      (insert (propertize
+               (concat "=== MACHER CONTEXT REFINEMENT ===\n"
+                       "Edit the workspace context below as needed.\n"
+                       "Press C-c C-c to confirm changes, or C-c C-k to cancel.\n"
+                       "========================================\n\n")
+               'face 'font-lock-comment-face))
+
+      ;; Insert the actual content to be edited
+      (let ((content-start (point)))
+        (insert initial-content)
+
+        ;; Position cursor at the start of editable content
+        (goto-char content-start))
+
+      ;; Enable text-mode for better editing experience
+      (text-mode)
+
+      ;; Create local keymap with confirmation keys
+      (let ((keymap (make-sparse-keymap)))
+        (set-keymap-parent keymap (current-local-map))
+        (define-key keymap (kbd "C-c C-c") #'macher--confirm-context-refinement)
+        (define-key keymap (kbd "C-c C-k") #'macher--cancel-context-refinement)
+        (use-local-map keymap)))
+
+    ;; Pop to the refinement buffer
+    (pop-to-buffer refinement-buffer)
+    (message "Edit context content. Press C-c C-c to confirm, C-c C-k to cancel.")
+
+    ;; Use recursive-edit to pause execution until user confirms or cancels
+    (recursive-edit)
+
+    ;; Clean up buffer
+    (when (buffer-live-p refinement-buffer)
+      (kill-buffer refinement-buffer))
+
+    ;; Return refined content if confirmed, otherwise original
+    macher--context-refinement-result))
+
+(defun macher--confirm-context-refinement ()
+  "Confirm the refined context content and exit refinement mode."
+  (interactive)
+  ;; Skip the header when extracting content
+  (let ((content-start (save-excursion
+                         (goto-char (point-min))
+                         (search-forward "========================================\n\n" nil t))))
+    (when content-start
+      (setq macher--context-refinement-result
+            (buffer-substring-no-properties content-start (point-max)))))
+  (setq macher--context-refinement-confirmed t)
+  (exit-recursive-edit))
+
+(defun macher--cancel-context-refinement ()
+  "Cancel context refinement and keep original content."
+  (interactive)
+  (setq macher--context-refinement-confirmed nil)
+  ;; macher--context-refinement-result keeps its initial value
+  (exit-recursive-edit))
 
 (defun macher--workspace-hash (workspace &optional length)
   "Generate a unique hash for WORKSPACE.
