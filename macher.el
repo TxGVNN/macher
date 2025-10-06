@@ -727,16 +727,16 @@ Returns a workspace information string to be added to the request."
             (dolist (rel-path files-in-context)
               (insert (format "    %s\n" rel-path))))
 
-          (when files-available-for-editing
-            (insert "\n")
-            (insert
-             (format "%s available for editing:\n"
-                     (if files-in-context
-                         "Other files"
-                       "Files")))
-            (dolist (rel-path files-available-for-editing)
-              (insert (format "    %s\n" rel-path)))
-            (insert "\n"))
+          ;; (when files-available-for-editing
+          ;;   (insert "\n")
+          ;;   (insert
+          ;;    (format "%s available for editing:\n"
+          ;;            (if files-in-context
+          ;;                "Other files"
+          ;;              "Files")))
+          ;;   (dolist (rel-path files-available-for-editing)
+          ;;     (insert (format "    %s\n" rel-path)))
+          ;;   (insert "\n"))
 
           (insert "\n")
           (insert "=======================================================\n")
