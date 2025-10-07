@@ -213,7 +213,7 @@ indicators."
   :type '(function :tag "Workspace string function")
   :group 'macher)
 
-(defcustom macher-allow-context-refinement t
+(defcustom macher-allow-context-refinement nil
   "Whether to allow interactive refinement of workspace context content.
 
 When non-nil, users can interactively edit the workspace context
